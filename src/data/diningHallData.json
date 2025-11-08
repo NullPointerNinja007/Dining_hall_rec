@@ -1,0 +1,81 @@
+[
+  {
+    "name": "Arrillaga Family Dining Commons",
+    "foodItems": [
+      { "name": "Grilled Chicken Breast", "allergens": ["dairy"] },
+      { "name": "Beef Stir Fry", "allergens": ["soy", "gluten"] },
+      { "name": "Vegetarian Pasta", "allergens": ["gluten", "eggs"] },
+      { "name": "Salmon Fillet", "allergens": ["fish"] },
+      { "name": "Caesar Salad", "allergens": ["dairy", "eggs", "gluten"] }
+    ]
+  },
+  {
+    "name": "Ricker Dining",
+    "foodItems": [
+      { "name": "Chicken Tacos", "allergens": ["dairy", "gluten"] },
+      { "name": "Beef Burger", "allergens": ["gluten", "eggs"] },
+      { "name": "Vegetarian Wrap", "allergens": ["gluten"] },
+      { "name": "Pasta Primavera", "allergens": ["gluten", "dairy"] }
+    ]
+  },
+  {
+    "name": "Wilbur Dining",
+    "foodItems": [
+      { "name": "Roasted Chicken", "allergens": [] },
+      { "name": "Beef Stew", "allergens": ["gluten"] },
+      { "name": "Grilled Vegetables", "allergens": [] },
+      { "name": "Vegetarian Curry", "allergens": ["soy"] }
+    ]
+  },
+  {
+    "name": "Stern Dining",
+    "foodItems": [
+      { "name": "BBQ Chicken", "allergens": ["soy"] },
+      { "name": "Beef Lasagna", "allergens": ["dairy", "gluten", "eggs"] },
+      { "name": "Vegetarian Stir Fry", "allergens": ["soy"] },
+      { "name": "Fish Tacos", "allergens": ["fish", "gluten"] }
+    ]
+  },
+  {
+    "name": "Florence Moore Dining",
+    "foodItems": [
+      { "name": "Chicken Teriyaki", "allergens": ["soy", "gluten"] },
+      { "name": "Beef Teriyaki", "allergens": ["soy", "gluten"] },
+      { "name": "Vegetarian Sushi", "allergens": [] },
+      { "name": "Miso Soup", "allergens": ["soy", "fish"] }
+    ]
+  },
+  {
+    "name": "Branner Dining",
+    "foodItems": [
+      { "name": "Grilled Chicken", "allergens": [] },
+      { "name": "Beef Tacos", "allergens": ["dairy", "gluten"] },
+      { "name": "Vegetarian Pizza", "allergens": ["gluten", "dairy"] }
+    ]
+  },
+  {
+    "name": "EVGR Dining",
+    "foodItems": [
+      { "name": "Chicken Wrap", "allergens": ["gluten"] },
+      { "name": "Beef Sandwich", "allergens": ["gluten"] },
+      { "name": "Vegetarian Bowl", "allergens": [] }
+    ]
+  },
+  {
+    "name": "Gerhard Casper Dining",
+    "foodItems": [
+      { "name": "Chicken Curry", "allergens": ["dairy"] },
+      { "name": "Beef Stroganoff", "allergens": ["dairy", "gluten"] },
+      { "name": "Vegetarian Pasta", "allergens": ["gluten", "eggs"] }
+    ]
+  },
+  {
+    "name": "Lakeside Dining",
+    "foodItems": [
+      { "name": "Grilled Chicken", "allergens": [] },
+      { "name": "Beef Burger", "allergens": ["gluten", "eggs"] },
+      { "name": "Vegetarian Salad", "allergens": [] }
+    ]
+  }
+]
+
