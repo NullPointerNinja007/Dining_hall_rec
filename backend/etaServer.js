@@ -6,16 +6,23 @@ const { URL, URLSearchParams } = require("url");
 const GOOGLE_BASE_URL =
   "https://maps.googleapis.com/maps/api/distancematrix/json";
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+function applyCors(res) {
+  for (const [key, value] of Object.entries(CORS_HEADERS)) {
+    res.setHeader(key, value);
+  }
+}
+
 const DINING_HALLS = [
   {
-    name: "Arrillaga Dining",
+    name: "Arrillaga Family Dining Commons",
     lat: 37.4254899164213,
     lon: -122.164203213491,
-  },
-  {
-    name: "Stern Dining",
-    lat: 37.424536020889356,
-    lon: -122.1656459941451,
   },
   {
     name: "Branner Dining",
@@ -28,12 +35,12 @@ const DINING_HALLS = [
     lon: -122.17179705029382,
   },
   {
-    name: "Gerhard Casper Dining",
+    name: "Gerhard Casper Dining Commons",
     lat: 37.42556995420307,
     lon: -122.16193454752708,
   },
   {
-    name: "Lakeside Dining",
+    name: "Lakeside Dining Commons",
     lat: 37.42467330589694,
     lon: -122.17633688795281,
   },
@@ -43,17 +50,23 @@ const DINING_HALLS = [
     lon: -122.18052942714579,
   },
   {
-    name: "Wilbur Dining",
+    name: "Stern Dining",
+    lat: 37.424536020889356,
+    lon: -122.1656459941451,
+  },
+  {
+    name: "Wilbur Dining Hall",
     lat: 37.42401672059748,
     lon: -122.16311743032858,
   },
 ];
 
-function createErrorResponse(statusCode, payload) {
-  return {
-    statusCode,
-    payload: JSON.stringify(payload),
-  };
+function sendJson(res, statusCode, payload) {
+  applyCors(res);
+  res.writeHead(statusCode, {
+    "Content-Type": "application/json",
+  });
+  res.end(JSON.stringify(payload));
 }
 
 function buildDestinations() {
@@ -94,7 +107,7 @@ function toKilometers(distanceElement) {
   if (!distanceElement || typeof distanceElement.value !== "number") {
     return null;
   }
-  return Math.round((distanceElement.value / 1000) * 1000) / 1000;
+  return Math.round((distanceElement.value / 1000) * 100) / 100;
 }
 
 async function handleEtaRequest(origin, apiKey) {
@@ -115,13 +128,10 @@ async function handleEtaRequest(origin, apiKey) {
       bikeElement.status === "OK" ? toMinutes(bikeElement.duration) : null;
 
     return {
-      name: hall.name,
-      lat: hall.lat,
-      lon: hall.lon,
+      hall: hall.name,
       distance_km: distanceKm,
       walk_min: walkMinutes,
       bike_min: bikeMinutes,
-      source: "google_distance_matrix",
     };
   });
 }
@@ -133,11 +143,7 @@ async function handleRequest(req, res) {
   if (req.method === "POST" && requestUrl.pathname === "/api/etas") {
     const apiKey = process.env.GOOGLE_MAPS_KEY;
     if (!apiKey) {
-      const { statusCode, payload } = createErrorResponse(500, {
-        error: "missing_api_key",
-      });
-      res.writeHead(statusCode, { "Content-Type": "application/json" });
-      res.end(payload);
+      sendJson(res, 500, { error: "missing_api_key" });
       return;
     }
 
@@ -150,12 +156,10 @@ async function handleRequest(req, res) {
     });
 
     req.on("error", (error) => {
-      const { statusCode, payload } = createErrorResponse(400, {
-        error: error.message || "request_error",
-      });
       if (!res.headersSent) {
-        res.writeHead(statusCode, { "Content-Type": "application/json" });
-        res.end(payload);
+        sendJson(res, 400, {
+          error: error.message || "request_error",
+        });
       }
     });
 
@@ -168,35 +172,33 @@ async function handleRequest(req, res) {
           typeof origin.lat !== "number" ||
           typeof origin.lon !== "number"
         ) {
-          const { statusCode, payload } = createErrorResponse(400, {
-            error: "invalid_origin",
-          });
-          res.writeHead(statusCode, { "Content-Type": "application/json" });
-          res.end(payload);
+          sendJson(res, 400, { error: "invalid_origin" });
           return;
         }
 
         const results = await handleEtaRequest(origin, apiKey);
-        const responsePayload = JSON.stringify(results);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(responsePayload);
+        sendJson(res, 200, results);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "unknown_error";
-        const { statusCode, payload } = createErrorResponse(500, {
-          error: message,
-        });
         if (!res.headersSent) {
-          res.writeHead(statusCode, { "Content-Type": "application/json" });
+          sendJson(res, 500, { error: message });
+        } else {
+          res.end();
         }
-        res.end(payload);
       }
     });
     return;
   }
 
-  res.writeHead(404, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ error: "not_found" }));
+  if (req.method === "OPTIONS" && requestUrl.pathname === "/api/etas") {
+    applyCors(res);
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  sendJson(res, 404, { error: "not_found" });
 }
 
 function ensureGoogleMapsKey() {
@@ -231,6 +233,7 @@ function createEtaServer() {
     handleRequest(req, res).catch((error) => {
       const message = error instanceof Error ? error.message : "unknown_error";
       if (!res.headersSent) {
+        applyCors(res);
         res.writeHead(500, { "Content-Type": "application/json" });
       }
       res.end(JSON.stringify({ error: message }));

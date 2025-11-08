@@ -4,13 +4,10 @@ type LatLon = {
 };
 
 export type EtaResult = {
-  name: string;
-  lat: number;
-  lon: number;
+  hall: string;
   distance_km: number;
   walk_min: number;
   bike_min: number;
-  source: string;
 };
 
 type EtaResponse = {
