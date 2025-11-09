@@ -81,6 +81,111 @@ async function getDiningHallsData(meal = 'Dinner', date = null) {
 }
 
 /**
+ * Generate a healthy meal plan for a specific dining hall
+ * @param {Object} hall - Dining hall object with foodItems
+ * @param {string} userQuery - User's meal preferences (e.g., "balanced meal", "high protein", "vegetarian")
+ * @param {string} meal - Meal type (default: 'Dinner')
+ * @param {string} date - Date in format "MM/DD/YYYY" (default: today)
+ * @returns {Promise<string>} - Meal plan recommendations as text
+ */
+export async function generateMealPlan(hall, userQuery, meal = 'Dinner', date = null) {
+  try {
+    console.log('Generating meal plan for:', hall.name, 'with query:', userQuery)
+    
+    // Get all food items for this hall
+    const foodItems = hall.foodItems || []
+    
+    if (foodItems.length === 0) {
+      throw new Error('No food items available for this dining hall')
+    }
+
+    // Create prompt for meal plan generation
+    const foodItemsList = foodItems.map(item => {
+      const itemInfo = {
+        name: item.name || item,
+        allergens: item.allergens || [],
+        dietTags: item.dietTags || null,
+        ingredients: item.ingredients || null,
+      }
+      return itemInfo
+    })
+
+    const prompt = `You are a nutritionist helping design a healthy meal plan at ${hall.name} for ${meal}.
+
+User's preferences: "${userQuery}"
+
+Available food items at this dining hall:
+${JSON.stringify(foodItemsList, null, 2)}
+
+Based on the user's preferences and the available food items, provide a meal plan in a structured format.
+
+FORMAT YOUR RESPONSE EXACTLY AS FOLLOWS:
+
+1. First, create a section header based on the user's preference (e.g., "High Protein Foods:", "Vegetarian Options:", "Balanced Meal:")
+2. List foods matching the user's preference with bullet points and macros
+3. Then add: "To make this a balanced meal, eat:"
+4. List complementary foods with bullet points and macros
+
+Example format:
+High Protein Foods:
+• Grilled Chicken Breast - 1 serving (6 oz) - 280 cal, 54g protein, 0g carbs, 6g fat
+• Salmon Fillet - 1 serving (5 oz) - 250 cal, 40g protein, 0g carbs, 10g fat
+
+To make this a balanced meal, eat:
+• Brown Rice - 1 cup - 220 cal, 5g protein, 45g carbs, 2g fat
+• Steamed Broccoli - 1 cup - 55 cal, 4g protein, 11g carbs, 0g fat
+
+CRITICAL REQUIREMENTS:
+- Start with a section header matching the user's preference (e.g., "High Protein Foods:", "Low Calorie Options:", "Vegetarian Foods:")
+- List preference-matching foods first with bullet points and macros
+- Then add the sentence "To make this a balanced meal, eat:"
+- List complementary foods (carbs, vegetables, healthy fats) with bullet points and macros
+- Use bullet points (•) for each food item
+- Include estimated macros for each item: calories, protein, carbs, fat
+- NO other explanations, NO tips, NO extra text
+- Only include foods that are actually available at this dining hall
+- Keep it concise and structured`
+
+    // Try Gemini first
+    try {
+      console.log('Trying Gemini API for meal plan...')
+      const model = genAI.getGenerativeModel({ model: 'models/gemini-2.5-flash' })
+      const result = await model.generateContent(prompt)
+      const response = await result.response
+      const text = response.text()
+      
+      console.log('✅ Meal plan generated successfully')
+      return text.trim()
+    } catch (geminiError) {
+      console.warn('Gemini API failed, trying OpenAI as backup:', geminiError.message)
+      
+      // Fallback to OpenAI
+      try {
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: 'You are a helpful nutritionist that provides meal plan recommendations.' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 500,
+        })
+        
+        const text = completion.choices[0]?.message?.content || ''
+        console.log('✅ Meal plan generated with OpenAI')
+        return text.trim()
+      } catch (openaiError) {
+        console.error('OpenAI also failed:', openaiError)
+        throw new Error('Failed to generate meal plan. Please try again.')
+      }
+    }
+  } catch (error) {
+    console.error('Error generating meal plan:', error)
+    throw error
+  }
+}
+
+/**
  * Search dining halls based on user query using Gemini AI
  * @param {string} query - User's search query (e.g., "I want chicken", "Rank based on beef"). If empty, ranks all halls.
  * @param {string} meal - Meal type (default: 'Dinner')
