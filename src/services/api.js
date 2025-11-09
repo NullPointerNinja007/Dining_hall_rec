@@ -1,7 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import OpenAI from 'openai'
-import { fetchAllDiningHalls, getTodayDate, DINING_HALLS } from './diningHallData.js'
-import diningHallData from '../data/diningHallData.json'
 import { getFoodImageWithFallback } from './imageService.js'
 
 // Gemini API key
@@ -20,79 +18,66 @@ const openai = new OpenAI({
 })
 
 // Cache for dining hall data to avoid fetching multiple times
-let cachedDiningHallsData = null
-let cacheTimestamp = null
+// Cache key format: `${meal}-${date}`
+const diningHallsCache = new Map()
 const CACHE_DURATION = 60 * 60 * 1000 // 1 hour in milliseconds
 
-// Hardcoded dining hall data - Update this file with real data from the website
-// File: src/data/diningHallData.json
-const HARDCODED_DINING_HALLS = diningHallData
-
-// Legacy mock data - kept for reference/fallback
-const MOCK_DINING_HALLS = HARDCODED_DINING_HALLS
-
 /**
- * Get dining hall data (either from backend API, Stanford website, or hardcoded data)
+ * Get dining hall data from backend API (SQL database ONLY)
  * @param {string} meal - Meal type (default: 'Dinner')
  * @param {string} date - Date in format "MM/DD/YYYY" (default: today)
  * @returns {Promise<Array>} - Array of dining halls with menu items
+ * @throws {Error} - If backend API fails or returns no data
  */
 async function getDiningHallsData(meal = 'Dinner', date = null) {
-  const cacheKey = `${meal}-${date || 'today'}`
+  // Get today's date in MM/DD/YYYY format if not provided
+  if (!date) {
+    const today = new Date()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    const year = today.getFullYear()
+    date = `${month}/${day}/${year}`
+  }
+  
+  const cacheKey = `${meal}-${date}`
   const now = Date.now()
   
-  // Check if we have cached data that's still fresh
-  if (cachedDiningHallsData && cacheTimestamp && (now - cacheTimestamp) < CACHE_DURATION) {
-    console.log('Using cached dining hall data')
-    return cachedDiningHallsData
+  // Check if we have cached data for this specific meal/date combination
+  const cached = diningHallsCache.get(cacheKey)
+  if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+    console.log(`Using cached dining hall data for ${meal} on ${date}`)
+    return cached.data
   }
   
-  const targetDate = date || getTodayDate()
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
   
-  // Try to fetch from backend API first (database)
+  // ONLY fetch from backend API (SQL database)
   try {
-    console.log(`Attempting to fetch from backend API for ${meal} on ${targetDate}...`)
-    const response = await fetch(`${API_BASE_URL}/api/menu?date=${encodeURIComponent(targetDate)}&meal=${encodeURIComponent(meal)}`)
+    console.log(`Fetching from backend API (SQL) for ${meal} on ${date}...`)
+    const response = await fetch(`${API_BASE_URL}/api/menu?date=${encodeURIComponent(date)}&meal=${encodeURIComponent(meal)}`)
     
-    if (response.ok) {
-      const realData = await response.json()
-      if (realData && realData.length > 0 && realData.some(hall => hall.foodItems && hall.foodItems.length > 0)) {
-        console.log(`✅ Successfully fetched data from database for ${realData.length} dining halls`)
-        cachedDiningHallsData = realData
-        cacheTimestamp = now
-        return realData
-      } else {
-        console.log('Backend API returned empty data')
-      }
-    } else {
-      console.warn(`Backend API returned status ${response.status}`)
+    if (!response.ok) {
+      throw new Error(`Backend API returned status ${response.status}`)
     }
-  } catch (error) {
-    console.warn('Failed to fetch from backend API, trying alternative sources:', error.message)
-  }
-  
-  // Fallback: Try to fetch real data from Stanford's website
-  // Note: This may fail due to CORS restrictions in the browser
-  try {
-    console.log(`Attempting to fetch from Stanford website for ${meal} on ${targetDate}...`)
-    const realData = await fetchAllDiningHalls(meal, targetDate)
     
-    if (realData && realData.length > 0 && realData.some(hall => hall.foodItems.length > 0)) {
-      console.log(`✅ Successfully fetched data from website for ${realData.length} dining halls`)
-      cachedDiningHallsData = realData
-      cacheTimestamp = now
-      return realData
-    } else {
-      console.log('Website fetch returned empty data')
+    const realData = await response.json()
+    
+    if (!realData || realData.length === 0) {
+      throw new Error(`No data found for ${meal} on ${date}`)
     }
+    
+    if (!realData.some(hall => hall.foodItems && hall.foodItems.length > 0)) {
+      throw new Error(`No menu items found for ${meal} on ${date}`)
+    }
+    
+    console.log(`✅ Successfully fetched data from SQL database for ${realData.length} dining halls`)
+    // Cache the data with the specific meal/date key
+    diningHallsCache.set(cacheKey, { data: realData, timestamp: now })
+    return realData
   } catch (error) {
-    console.warn('Failed to fetch from Stanford website (likely CORS issue):', error.message)
+    console.error('Failed to fetch from backend API (SQL):', error.message)
+    throw new Error(`Unable to fetch dining hall data: ${error.message}`)
   }
-  
-  // Final fallback: Use hardcoded data from diningHallData.json
-  console.log(`Using hardcoded dining hall data from diningHallData.json`)
-  return HARDCODED_DINING_HALLS
 }
 
 /**
@@ -142,9 +127,8 @@ export async function searchDiningHalls(query = '', meal = 'Dinner', date = null
     console.error('API Error:', error)
     console.error('Error details:', error.message)
     
-    // Fallback to mock data if both APIs fail
-    console.warn('Falling back to mock data')
-    return getMockResults(query)
+    // NO FALLBACK - throw error if AI ranking fails
+    throw new Error(`Unable to rank dining halls: ${error.message}`)
   }
 }
 
@@ -250,14 +234,15 @@ ${diningHallsJSON}
 Please analyze the user's query and rank the dining halls from best to worst match. For each dining hall, provide:
 1. A relevance score from 1-10
 2. A brief reason explaining why it matches (or doesn't match) the user's query
-3. Filter the food items to only show items that are relevant to the user's query
+3. Rank the food items within each dining hall from most relevant to least relevant
+4. Filter the food items to only show items that are relevant to the user's query
 
 Return your response as a valid JSON array in this exact format (no markdown, no code blocks, just pure JSON):
 [
   {
     "name": "Dining Hall Name",
     "foodItems": [
-      {"name": "Food Item Name", "allergens": ["allergen1", "allergen2"]}
+      {"name": "Food Item Name", "allergens": ["allergen1", "allergen2"], "relevanceScore": 9}
     ],
     "score": 9,
     "reason": "Brief explanation of why this dining hall matches the query",
@@ -268,6 +253,8 @@ Return your response as a valid JSON array in this exact format (no markdown, no
 Important instructions:
 - Only include dining halls that have at least one relevant food item
 - Rank them from highest score (best match) to lowest score
+- Within each dining hall, rank food items by relevance (most relevant first)
+- Add a "relevanceScore" (1-10) to each food item indicating how relevant it is to the query
 - Only include food items that are relevant to the user's query
 - Return ONLY valid JSON, no markdown code blocks, no explanations before or after
 - The JSON must be parseable by JSON.parse()`
@@ -295,14 +282,15 @@ Please rank all dining halls from best to worst based on:
 For each dining hall, provide:
 1. A quality score from 1-10
 2. A brief reason explaining why it ranks at this position
-3. Show all food items available (don't filter)
+3. Rank the food items within each dining hall from most appealing/popular to least
+4. Show all food items available (don't filter)
 
 Return your response as a valid JSON array in this exact format (no markdown, no code blocks, just pure JSON):
 [
   {
     "name": "Dining Hall Name",
     "foodItems": [
-      {"name": "Food Item Name", "allergens": ["allergen1", "allergen2"]}
+      {"name": "Food Item Name", "allergens": ["allergen1", "allergen2"], "relevanceScore": 9}
     ],
     "score": 9,
     "reason": "Brief explanation of why this dining hall ranks well (e.g., great variety, popular items, etc.)",
@@ -392,9 +380,59 @@ async function parseGeminiResponse(text, originalHalls) {
       // Get image for the best food item
       const imageUrl = await getFoodImageWithFallback(bestFoodItemName, hall.name || originalHall?.name)
       
+      // Preserve food items with their relevanceScore if available
+      // Use AI's foodItems if provided, otherwise use original hall's items
+      // Deduplicate by item name to prevent duplicates
+      const aiFoodItems = hall.foodItems || []
+      const originalFoodItems = originalHall?.foodItems || []
+      
+      // If AI provided foodItems, use those (they're already ranked/filtered)
+      // Otherwise, use original hall's items
+      // But merge AI items with original items to preserve dietTags and other metadata
+      const sourceFoodItems = aiFoodItems.length > 0 ? aiFoodItems : originalFoodItems
+      
+      // Create a map of original items by name for merging metadata
+      const originalItemsMap = new Map()
+      originalFoodItems.forEach(item => {
+        const itemName = item.name || item
+        if (itemName) {
+          originalItemsMap.set(itemName.toLowerCase(), item)
+        }
+      })
+      
+      // Deduplicate by name to prevent any duplicates
+      const seenNames = new Set()
+      const foodItems = sourceFoodItems
+        .filter(item => {
+          const itemName = item.name || item
+          if (seenNames.has(itemName)) {
+            return false // Skip duplicate
+          }
+          seenNames.add(itemName)
+          return true
+        })
+        .map(item => {
+          const itemName = item.name || item
+          const originalItem = originalItemsMap.get(itemName.toLowerCase())
+          
+          // Merge AI item with original item to preserve dietTags, allergens, ingredients, etc.
+          return {
+            ...(originalItem || {}), // Start with original item (has all metadata) if it exists
+            ...item, // Override with AI item (has relevanceScore, etc.)
+            // Ensure dietTags is preserved from original if not in AI item
+            dietTags: item.dietTags || originalItem?.dietTags || null,
+            // Ensure allergens is preserved from original if not in AI item
+            allergens: item.allergens || originalItem?.allergens || [],
+            // Ensure ingredients is preserved from original if not in AI item
+            ingredients: item.ingredients || originalItem?.ingredients || null,
+            // Preserve relevanceScore if provided by AI, otherwise use 0
+            relevanceScore: item.relevanceScore || 0
+          }
+        })
+      
       return {
         name: hall.name || originalHall?.name || 'Unknown',
-        foodItems: hall.foodItems || originalHall?.foodItems || [],
+        foodItems: foodItems,
         score: typeof hall.score === 'number' ? Math.max(1, Math.min(10, hall.score)) : (originalHall ? 7 : 5),
         reason: hall.reason || 'Relevant to your query',
         image: imageUrl,
@@ -418,10 +456,21 @@ async function parseGeminiResponse(text, originalHalls) {
     const fallbackHalls = await Promise.all(originalHalls.map(async (hall, index) => {
       const bestFoodItem = hall.foodItems?.[0]?.name || null
       const imageUrl = await getFoodImageWithFallback(bestFoodItem, hall.name)
-      
+
+      // Deduplicate food items by name
+      const seenNames = new Set()
+      const uniqueFoodItems = (hall.foodItems || []).filter(item => {
+        const itemName = item.name || item
+        if (seenNames.has(itemName)) {
+          return false
+        }
+        seenNames.add(itemName)
+        return true
+      })
+
       return {
         name: hall.name,
-        foodItems: hall.foodItems || [],
+        foodItems: uniqueFoodItems,
         score: 7 - (index * 0.5), // Give a slight ranking based on order
         reason: 'Available options',
         image: imageUrl,
@@ -433,66 +482,3 @@ async function parseGeminiResponse(text, originalHalls) {
   }
 }
 
-/**
- * Fallback mock data if Gemini API fails
- */
-function getMockResults(query) {
-  const queryLower = query.toLowerCase()
-  
-  // Simple keyword-based ranking
-  const results = MOCK_DINING_HALLS.map(hall => {
-    let score = 5
-    let relevantItems = hall.foodItems
-    let reason = 'Has some options available'
-    
-    // Filter items based on query
-    if (queryLower.includes('chicken')) {
-      relevantItems = hall.foodItems.filter(item => 
-        item.name.toLowerCase().includes('chicken')
-      )
-      score = relevantItems.length > 0 ? 7 + relevantItems.length : 3
-      reason = relevantItems.length > 0 
-        ? `Has ${relevantItems.length} chicken option(s)` 
-        : 'Limited chicken options'
-    } else if (queryLower.includes('beef')) {
-      relevantItems = hall.foodItems.filter(item => 
-        item.name.toLowerCase().includes('beef')
-      )
-      score = relevantItems.length > 0 ? 7 + relevantItems.length : 3
-      reason = relevantItems.length > 0 
-        ? `Has ${relevantItems.length} beef option(s)` 
-        : 'Limited beef options'
-    } else if (queryLower.includes('vegetarian') || queryLower.includes('veggie')) {
-      relevantItems = hall.foodItems.filter(item => 
-        item.name.toLowerCase().includes('vegetarian') || 
-        item.name.toLowerCase().includes('veggie')
-      )
-      score = relevantItems.length > 0 ? 7 + relevantItems.length : 3
-      reason = relevantItems.length > 0 
-        ? `Has ${relevantItems.length} vegetarian option(s)` 
-        : 'Limited vegetarian options'
-    } else if (queryLower.includes('fish')) {
-      relevantItems = hall.foodItems.filter(item => 
-        item.name.toLowerCase().includes('fish') || 
-        item.name.toLowerCase().includes('salmon')
-      )
-      score = relevantItems.length > 0 ? 7 + relevantItems.length : 3
-      reason = relevantItems.length > 0 
-        ? `Has ${relevantItems.length} fish option(s)` 
-        : 'Limited fish options'
-    }
-    
-    return {
-      name: hall.name,
-      foodItems: relevantItems.length > 0 ? relevantItems : hall.foodItems,
-      score: Math.min(score, 10),
-      reason,
-      image: null,
-    }
-  })
-  
-  // Sort by score and filter out halls with no relevant items
-  return results
-    .filter(hall => hall.foodItems.length > 0)
-    .sort((a, b) => b.score - a.score)
-}

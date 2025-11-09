@@ -38,11 +38,11 @@ createdb -U "$DB_USER" "$DB_NAME" 2>/dev/null || {
 
 # Get path to SQL file
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SQL_FILE="$SCRIPT_DIR/../stanford_menu.sql"
+SQL_FILE="$SCRIPT_DIR/../scraped_stanford_menu.sql"
 
 if [ ! -f "$SQL_FILE" ]; then
     echo "❌ SQL file not found at: $SQL_FILE"
-    echo "Please make sure stanford_menu.sql is in the project root directory"
+    echo "Please make sure scraped_stanford_menu.sql is in the project root directory"
     exit 1
 fi
 

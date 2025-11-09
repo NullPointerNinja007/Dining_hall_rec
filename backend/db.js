@@ -93,9 +93,13 @@ async function getDiningHallsMenu(date, meal) {
       formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     }
 
+    // Map "Brunch" to "Lunch" - on weekends, Brunch uses Lunch menu data
+    const dbMeal = meal === 'Brunch' ? 'Lunch' : meal;
+
     // Query based on the actual schema: menu_item table
+    // Use DISTINCT ON to get unique items per dining hall (in case of duplicates in DB)
     const queryText = `
-      SELECT 
+      SELECT DISTINCT ON (hall_name, name)
         hall_name,
         name as item_name,
         station,
@@ -106,16 +110,24 @@ async function getDiningHallsMenu(date, meal) {
         notes
       FROM menu_item
       WHERE date_served = $1 AND meal_type = $2
-      ORDER BY hall_name, category, name
+      ORDER BY hall_name, name, item_id
     `;
 
-    const result = await query(queryText, [formattedDate, meal]);
+    const result = await query(queryText, [formattedDate, dbMeal]);
 
     // Transform result into expected format
     const hallsMap = new Map();
+    const seenItems = new Map(); // Track seen items per hall to prevent duplicates
 
     result.rows.forEach(row => {
       const hallName = row.hall_name;
+      const itemKey = `${hallName}-${row.item_name}`;
+      
+      // Skip if we've already seen this exact item for this hall
+      if (seenItems.has(itemKey)) {
+        return;
+      }
+      seenItems.set(itemKey, true);
       
       if (!hallsMap.has(hallName)) {
         hallsMap.set(hallName, {

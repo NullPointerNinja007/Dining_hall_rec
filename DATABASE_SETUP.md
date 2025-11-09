@@ -14,18 +14,18 @@ cd backend
 This script will:
 - Check if PostgreSQL is installed
 - Create the database
-- Import the SQL file from the project root (`stanford_menu.sql`)
+- Import the SQL file from the project root (`scraped_stanford_menu.sql`)
 - Guide you through the next steps
 
 ## Database Schema
 
-The database uses a single table `menu_item` as defined in `stanford_menu.sql` (located in the project root directory).
+The database uses a single table `menu_item` as defined in `scraped_stanford_menu.sql` (located in the project root directory).
 
 The SQL file contains:
 - Table creation statement
 - Sample data for dining hall menus
 
-**Note:** The `stanford_menu.sql` file is already in the project root directory. You don't need to download it separately.
+**Note:** The `scraped_stanford_menu.sql` file is already in the project root directory. You don't need to download it separately.
 
 ```sql
 CREATE TABLE menu_item (
@@ -88,14 +88,14 @@ GRANT ALL PRIVILEGES ON DATABASE stanford_menu TO your_username;
 
 ### 3. Import SQL File
 
-The SQL file `stanford_menu.sql` is already in the project root directory. Import it:
+The SQL file `scraped_stanford_menu.sql` is already in the project root directory. Import it:
 
 ```bash
 # From the project root directory
-psql -d stanford_menu -U your_username -f stanford_menu.sql
+psql -d stanford_menu -U your_username -f scraped_stanford_menu.sql
 
 # Or if you're in a different directory, use the full path
-psql -d stanford_menu -U your_username -f /path/to/Dining\ Hall\ Ranking/stanford_menu.sql
+psql -d stanford_menu -U your_username -f /path/to/Dining\ Hall\ Ranking/scraped_stanford_menu.sql
 ```
 
 **Note:** Make sure you're in the project root directory or provide the correct path to the SQL file.
@@ -192,7 +192,7 @@ heroku config:get DATABASE_URL
 - Verify the database name in `.env`
 
 ### Table does not exist
-- Make sure you imported the SQL file: `psql -d stanford_menu -f stanford_menu.sql`
+- Make sure you imported the SQL file: `psql -d stanford_menu -f scraped_stanford_menu.sql`
 - Check if the table exists: `\dt` in psql
 
 ## Database Queries

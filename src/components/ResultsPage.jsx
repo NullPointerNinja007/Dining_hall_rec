@@ -21,6 +21,39 @@ const AllergenBadge = ({ allergen }) => {
   )
 }
 
+// Diet tag badge component
+const DietTagBadge = ({ tag }) => {
+  // Normalize tag to uppercase and handle variations
+  const normalizedTag = tag.trim().toUpperCase()
+  
+  // Map common variations to standard display
+  const tagMap = {
+    'GF': 'GF',
+    'GLUTEN-FREE': 'GF',
+    'V': 'V',
+    'VEGETARIAN': 'V',
+    'VG': 'VG',
+    'VGN': 'VG',
+    'VEGAN': 'VG',
+    'HALAL': 'Halal',
+  }
+  
+  const displayTag = tagMap[normalizedTag] || normalizedTag
+  
+  const colors = {
+    'GF': 'bg-purple-500',
+    'V': 'bg-green-600',
+    'VG': 'bg-emerald-500',
+    'HALAL': 'bg-indigo-500',
+  }
+
+  return (
+    <span className={`px-2 py-1 text-xs font-semibold text-white rounded-full ${colors[displayTag] || 'bg-gray-600'}`}>
+      {displayTag}
+    </span>
+  )
+}
+
 // Food item with hover tooltip for ingredients
 const FoodItem = ({ item }) => {
   const [showTooltip, setShowTooltip] = useState(false)
@@ -42,15 +75,30 @@ const FoodItem = ({ item }) => {
       onMouseLeave={() => setShowTooltip(false)}
     >
       <span className="text-red-400 font-bold mt-1">•</span>
-      <div className="flex-1 relative">
-        <span className={hasIngredients ? "cursor-help" : ""}>{item.name || item}</span>
-        {item.allergens && item.allergens.length > 0 && (
-          <div className="flex gap-1 ml-2 mt-1">
-            {item.allergens.map((allergen, aIdx) => (
-              <AllergenBadge key={aIdx} allergen={allergen} />
-            ))}
-          </div>
-        )}
+      <div className="flex-1 relative z-10">
+        <span className={hasIngredients ? "cursor-help underline decoration-dotted decoration-red-400/50" : ""}>{item.name || item}</span>
+        <div className="flex flex-wrap gap-1 ml-2 mt-1">
+          {item.allergens && item.allergens.length > 0 && (
+            item.allergens.map((allergen, aIdx) => (
+              <AllergenBadge key={`allergen-${aIdx}`} allergen={allergen} />
+            ))
+          )}
+          {item.dietTags && (() => {
+            // Parse diet tags from string (e.g., "GF, VGN, Halal" or "V, Halal")
+            let dietTagsArray = []
+            if (typeof item.dietTags === 'string') {
+              dietTagsArray = item.dietTags
+                .split(',')
+                .map(tag => tag.trim())
+                .filter(tag => tag.length > 0)
+            } else if (Array.isArray(item.dietTags)) {
+              dietTagsArray = item.dietTags
+            }
+            return dietTagsArray.map((tag, tIdx) => (
+              <DietTagBadge key={`diet-${tIdx}`} tag={tag} />
+            ))
+          })()}
+        </div>
         
         {/* Ingredients Tooltip */}
         {hasIngredients && showTooltip && (
@@ -60,7 +108,8 @@ const FoodItem = ({ item }) => {
             onMouseLeave={() => setShowTooltip(false)}
             style={{ 
               transform: 'translateX(0)',
-              maxWidth: 'calc(100vw - 2rem)'
+              maxWidth: 'calc(100vw - 2rem)',
+              minWidth: '200px'
             }}
           >
             <div className="flex items-center gap-2 mb-2">
@@ -82,6 +131,18 @@ const FoodItem = ({ item }) => {
 // Dining hall card component
 const DiningHallCard = ({ hall, rank }) => {
   const [imageError, setImageError] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  
+  // Sort food items by relevanceScore if available, otherwise keep original order
+  const sortedFoodItems = [...(hall.foodItems || [])].sort((a, b) => {
+    const scoreA = a.relevanceScore || 0
+    const scoreB = b.relevanceScore || 0
+    return scoreB - scoreA // Higher score first
+  })
+  
+  // Show top 5 initially, or all if expanded
+  const visibleFoodItems = expanded ? sortedFoodItems : sortedFoodItems.slice(0, 5)
+  const hasMoreItems = sortedFoodItems.length > 5
   
   return (
     <div className="bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-700">
@@ -113,16 +174,40 @@ const DiningHallCard = ({ hall, rank }) => {
         
         {/* Food items */}
         <div className="mb-4">
-          <h3 className="text-sm font-semibold text-red-400 mb-2 uppercase tracking-wide">Menu Items</h3>
+          <h3 className="text-sm font-semibold text-red-400 mb-2 uppercase tracking-wide">
+            Menu Items {sortedFoodItems.length > 0 && `(${sortedFoodItems.length})`}
+          </h3>
           <ul className="space-y-2">
-            {hall.foodItems && hall.foodItems.length > 0 ? (
-              hall.foodItems.map((item, idx) => (
+            {visibleFoodItems.length > 0 ? (
+              visibleFoodItems.map((item, idx) => (
                 <FoodItem key={idx} item={item} />
               ))
             ) : (
               <li className="text-gray-400 italic">No items listed</li>
             )}
           </ul>
+          {hasMoreItems && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="mt-3 text-sm text-red-400 hover:text-red-500 font-semibold transition-colors duration-200 flex items-center gap-1"
+            >
+              {expanded ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                  </svg>
+                  Show Less
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  Show All ({sortedFoodItems.length - 5} more)
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Score/Reason */}

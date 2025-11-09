@@ -80,7 +80,7 @@ Get all dining halls.
 
 ## Database Schema
 
-The database uses a single `menu_item` table as defined in `stanford_menu.sql`:
+The database uses a single `menu_item` table as defined in `scraped_stanford_menu.sql`:
 
 ```sql
 CREATE TABLE menu_item (
@@ -109,7 +109,7 @@ createdb stanford_menu
 
 2. Import the SQL file from the project root:
 ```bash
-psql -d stanford_menu -f ../stanford_menu.sql
+psql -d stanford_menu -f ../scraped_stanford_menu.sql
 ```
 
 The SQL queries in `db.js` are already configured for this schema.

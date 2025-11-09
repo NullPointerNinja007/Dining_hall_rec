@@ -26,22 +26,35 @@ npm install
 ```
 
 2. (Optional) Set up the database backend:
-   - The SQL file `stanford_menu.sql` is already in the project root
+   - The SQL file `scraped_stanford_menu.sql` is already in the project root
    - See [DATABASE_SETUP.md](./DATABASE_SETUP.md) for detailed instructions
    - Quick setup: `cd backend && ./setup-db.sh`
    - The app will work without the database, using hardcoded data as fallback
 
-3. (Optional) Start the backend server (if using database):
+3. Install backend dependencies (if using database):
 ```bash
 cd backend
 npm install
+cd ..
+```
+
+4. Start both frontend and backend servers together:
+```bash
 npm start
 ```
 
-4. Start the frontend development server:
+Or use the convenience script:
 ```bash
-npm run dev
+./start.sh
 ```
+
+This will start:
+- Backend server on `http://localhost:3001`
+- Frontend server on `http://localhost:5173`
+
+Alternatively, you can start them separately:
+- Backend only: `npm run backend`
+- Frontend only: `npm run dev`
 
 5. Open your browser and navigate to `http://localhost:5173`
 
