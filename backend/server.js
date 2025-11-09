@@ -61,6 +61,30 @@ app.get('/api/dates', async (req, res) => {
   }
 });
 
+// ETA endpoint - Get travel times and distances to dining halls
+app.post('/api/etas', async (req, res) => {
+  try {
+    const { origin } = req.body;
+    
+    if (!origin || typeof origin.lat !== 'number' || typeof origin.lon !== 'number') {
+      return res.status(400).json({ error: 'invalid_origin' });
+    }
+
+    const GOOGLE_MAPS_KEY = process.env.GOOGLE_MAPS_KEY;
+    if (!GOOGLE_MAPS_KEY) {
+      return res.status(500).json({ error: 'missing_api_key' });
+    }
+
+    // Import etaServer functions
+    const etaServer = require('./etaServer');
+    const results = await etaServer.handleEtaRequest(origin, GOOGLE_MAPS_KEY);
+    res.json(results);
+  } catch (error) {
+    console.error('Error in /api/etas:', error);
+    res.status(500).json({ error: error.message || 'unknown_error' });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);

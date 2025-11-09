@@ -1,6 +1,8 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import FeedbackModal from './FeedbackModal'
+import { getEtasWithStatus } from '../services/etaService'
+import { TRANSPORT_KEY } from './SettingsModal'
 
 // Allergen badge component
 const AllergenBadge = ({ allergen }) => {
@@ -129,7 +131,7 @@ const FoodItem = ({ item }) => {
 }
 
 // Dining hall card component
-const DiningHallCard = ({ hall, rank }) => {
+const DiningHallCard = ({ hall, rank, etas, transportMode, etaLoading }) => {
   const [imageError, setImageError] = useState(false)
   const [expanded, setExpanded] = useState(false)
   
@@ -210,6 +212,72 @@ const DiningHallCard = ({ hall, rank }) => {
           )}
         </div>
 
+        {/* Location/Distance Info */}
+        {(() => {
+          // Show loading state
+          if (etaLoading) {
+            return (
+              <div className="mt-4 pt-4 border-t border-gray-700">
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Loading location...</span>
+                </div>
+              </div>
+            )
+          }
+          
+          if (!etas || etas.length === 0) return null
+          
+          // Try to find matching ETA data by exact match first, then partial match
+          let etaData = etas.find(e => e.hall === hall.name)
+          if (!etaData) {
+            etaData = etas.find(e => 
+              e.hall.toLowerCase().includes(hall.name.toLowerCase()) || 
+              hall.name.toLowerCase().includes(e.hall.toLowerCase())
+            )
+          }
+          
+          if (!etaData) {
+            console.log(`No ETA data found for hall: ${hall.name}`, { etas, hallName: hall.name })
+            return null
+          }
+          
+          const distanceMiles = etaData.distance_km ? (etaData.distance_km * 0.621371).toFixed(2) : null
+          const etaMinutes = transportMode === 'walking' ? etaData.walk_min : etaData.bike_min
+          
+          // Only show if we have at least distance or ETA
+          if (!distanceMiles && !etaMinutes) {
+            return null
+          }
+          
+          return (
+            <div className="mt-4 pt-4 border-t border-gray-700">
+              <div className="flex items-center gap-4 text-sm">
+                {distanceMiles && (
+                  <div className="flex items-center gap-1.5">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="text-gray-300">{distanceMiles} mi</span>
+                  </div>
+                )}
+                {etaMinutes && (
+                  <div className="flex items-center gap-1.5">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-gray-300">{Math.round(etaMinutes)} min {transportMode === 'walking' ? 'walk' : 'bike'}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+
         {/* Score/Reason */}
         {hall.score !== undefined && (
           <div className="mt-4 pt-4 border-t border-gray-700">
@@ -247,6 +315,9 @@ function ResultsPage() {
   const [meal, setMeal] = useState('')
   const [date, setDate] = useState('')
   const [showFeedback, setShowFeedback] = useState(false)
+  const [etas, setEtas] = useState([])
+  const [transportMode, setTransportMode] = useState('walking')
+  const [etaLoading, setEtaLoading] = useState(false)
 
   useEffect(() => {
     if (location.state) {
@@ -259,6 +330,42 @@ function ResultsPage() {
       navigate('/')
     }
   }, [location, navigate])
+
+  // Load transport preference
+  useEffect(() => {
+    const saved = localStorage.getItem(TRANSPORT_KEY)
+    if (saved === 'walking' || saved === 'biking') {
+      setTransportMode(saved)
+    }
+  }, [])
+
+  // Fetch ETAs when results are loaded
+  useEffect(() => {
+    if (results && results.length > 0) {
+      console.log('Results loaded, fetching ETAs...', results.length)
+      fetchEtas()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results])
+
+  const fetchEtas = async () => {
+    setEtaLoading(true)
+    try {
+      console.log('Fetching ETAs...')
+      const { data, status } = await getEtasWithStatus()
+      console.log('ETA response:', { data, status })
+      if (status === 200 && data.length > 0) {
+        console.log('Setting ETAs:', data)
+        setEtas(data)
+      } else {
+        console.warn('No ETA data received or status not 200:', { data, status })
+      }
+    } catch (error) {
+      console.error('Error fetching ETAs:', error)
+    } finally {
+      setEtaLoading(false)
+    }
+  }
 
   // Mock data for demonstration (will be replaced with actual API response)
   const mockResults = results || [
@@ -353,7 +460,7 @@ function ResultsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {mockResults.map((hall, index) => (
-            <DiningHallCard key={index} hall={hall} rank={index + 1} />
+            <DiningHallCard key={index} hall={hall} rank={index + 1} etas={etas} transportMode={transportMode} etaLoading={etaLoading} />
           ))}
         </div>
 
