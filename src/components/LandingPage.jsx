@@ -128,11 +128,8 @@ function LandingPage() {
         {/* Greeting */}
         <div className="text-center mb-8 animate-slide-up">
           <h1 className="text-6xl md:text-7xl font-bold text-white mb-4">
-            Hello!
+            Welcome to <span className="text-red-500">RedPlate</span> 🍽
           </h1>
-          <p className="text-xl md:text-2xl text-gray-200">
-            Welcome to Stanford Dining Hall Ranking
-          </p>
         </div>
 
         {/* Date and Meal Selectors */}
